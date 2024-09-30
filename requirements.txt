@@ -5,3 +5,4 @@ torchvision
 transformers
 pillow
 python-dotenv
+selenium

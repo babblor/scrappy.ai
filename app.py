@@ -7,8 +7,9 @@ from transformers import CLIPProcessor, CLIPModel
 from io import BytesIO
 from dotenv import load_dotenv
 import torch
-
-
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+import time
 
 # Load environment variables
 load_dotenv()
@@ -26,7 +27,6 @@ def is_supported_image_format(img_url):
 def is_painting_or_drawing(image_content):
     image = Image.open(BytesIO(image_content))
 
-    # Expanded prompts for better classification
     inputs = processor(
         text=["a painting", "a drawing", "a sketch", "a piece of art", "a realistic image"], 
         images=image, 
@@ -38,32 +38,34 @@ def is_painting_or_drawing(image_content):
     logits_per_image = outputs.logits_per_image
     probs = logits_per_image.softmax(dim=1)
 
-    # Extract probabilities for each category
     painting_prob = probs[0][0].item()  # "a painting"
     drawing_prob = probs[0][1].item()  # "a drawing"
     sketch_prob = probs[0][2].item()   # "a sketch"
     art_prob = probs[0][3].item()      # "a piece of art"
     realistic_prob = probs[0][4].item()  # "a realistic image"
 
-    # Return True if painting or drawing has a higher probability than realistic
     return (painting_prob + drawing_prob + sketch_prob + art_prob) > realistic_prob
 
-# Function to scrape images from multiple URLs
-def scrape_images(urls, folder="images"):
+# Function to initialize Safari WebDriver
+def init_webdriver():
+    # Initialize Safari WebDriver (no need for a separate driver installation on macOS)
+    driver = webdriver.Safari()  # Safari doesn't require options like Chrome
+    return driver
+
+# Function to scrape images dynamically with Selenium and Safari
+def scrape_images_with_selenium(urls, folder="images"):
     if not os.path.exists(folder):
         os.makedirs(folder)
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"
-    }
 
+    driver = init_webdriver()  # Use Safari WebDriver
+    
     for url in urls:
         print(f"Scraping {url}...")
         try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
+            driver.get(url)
+            time.sleep(5)  # Let the page load completely
+
+            soup = BeautifulSoup(driver.page_source, "html.parser")
             img_tags = soup.find_all("img")
 
             for img in img_tags:
@@ -77,7 +79,7 @@ def scrape_images(urls, folder="images"):
 
                     img_name = os.path.basename(img_url)
                     try:
-                        img_response = requests.get(img_url, headers=headers)
+                        img_response = requests.get(img_url)
                         img_response.raise_for_status()
 
                         if is_painting_or_drawing(img_response.content):
@@ -89,13 +91,15 @@ def scrape_images(urls, folder="images"):
                             print(f"Skipped {img_name} (not a painting or drawing)")
                     except Exception as e:
                         print(f"Could not download {img_url}. Reason: {e}")
-        except requests.exceptions.RequestException as e:
-            print(f"Failed to retrieve the webpage: {url}. Error: {e}")
+        except Exception as e:
+            print(f"Error while processing {url}: {e}")
+        finally:
+            print(f"Finished scraping {url}")
 
-
+    driver.quit()
 
 # Get URLs from the environment and split them into a list
 urls = os.getenv("URLS").split(',')
 
-# Run the scraper with the list of URLs
-scrape_images(["https://vachana.taralabalu.in/index2.php"])
+# Run the scraper with Selenium and Safari
+scrape_images_with_selenium(urls)

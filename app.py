@@ -8,6 +8,8 @@ from io import BytesIO
 from dotenv import load_dotenv
 import torch
 
+
+
 # Load environment variables
 load_dotenv()
 
@@ -51,10 +53,15 @@ def scrape_images(urls, folder="images"):
     if not os.path.exists(folder):
         os.makedirs(folder)
     
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"
+    }
+
     for url in urls:
         print(f"Scraping {url}...")
         try:
-            response = requests.get(url)
+            response = requests.get(url, headers=headers)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
             img_tags = soup.find_all("img")
@@ -63,18 +70,16 @@ def scrape_images(urls, folder="images"):
                 img_url = img.get("src")
                 if img_url:
                     img_url = urljoin(url, img_url)
-                    
-                    # Skip if the file is not a supported image format (e.g., skip SVG files)
+
                     if not is_supported_image_format(img_url):
                         print(f"Skipped {img_url} (unsupported format)")
                         continue
 
                     img_name = os.path.basename(img_url)
                     try:
-                        img_response = requests.get(img_url)
+                        img_response = requests.get(img_url, headers=headers)
                         img_response.raise_for_status()
 
-                        # Only save the image if it's classified as a painting or drawing
                         if is_painting_or_drawing(img_response.content):
                             img_path = os.path.join(folder, img_name)
                             with open(img_path, "wb") as f:
@@ -87,8 +92,10 @@ def scrape_images(urls, folder="images"):
         except requests.exceptions.RequestException as e:
             print(f"Failed to retrieve the webpage: {url}. Error: {e}")
 
+
+
 # Get URLs from the environment and split them into a list
 urls = os.getenv("URLS").split(',')
 
 # Run the scraper with the list of URLs
-scrape_images(urls)
+scrape_images(["https://vachana.taralabalu.in/index2.php"])
